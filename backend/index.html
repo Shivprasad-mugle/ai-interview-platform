@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <title>AI Interview</title>
+
+    <style>
+        body {
+            font-family: Arial;
+            background: #f4f6f9;
+            padding: 40px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            margin-top: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        input,
+        select,
+        textarea,
+        button {
+            padding: 10px;
+            margin: 10px 5px;
+        }
+
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .tabs {
+            margin: 20px 0;
+        }
+
+        .tabs button {
+            padding: 10px 20px;
+            margin-right: 10px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+        }
+
+        .tab-content {
+            margin-top: 20px;
+        }
+    </style>
+
+</head>
+
+<body>
+    <div class="container">
+
+        <h1>AI Interview Platform</h1>
+
+        <!-- USER DETAILS -->
+        <div class="card">
+            <h3>User Details</h3>
+
+            <label>Username</label>
+            <input type="text" id="username" placeholder="Enter username">
+
+            <label>Select Mode</label>
+
+            <select id="mode" onchange="loadQuestion()">
+                <option value="technical">Technical</option>
+                <option value="hr">HR</option>
+            </select>
+
+        </div>
+
+        <div class="tabs">
+            <button onclick="openTab('quiz')">Technical Quiz</button>
+            <button onclick="openTab('mock')">AI Mock Interview</button>
+        </div>
+
+        <div id="quiz" class="tab-content">
+
+            <h2>Technical Quiz</h2>
+
+            <h3 id="question">Question will appear here</h3>
+
+            <input type="text" id="answer" placeholder="Type answer">
+
+            <button onclick="submitAnswer()">Submit</button>
+            <button onclick="loadQuestion()">Next Question</button>
+            <button onclick="showLeaderboard()">Leaderboard</button>
+            <button onclick="startVoice()">Speak Answer</button>
+
+            <h3 id="result"></h3>
+
+        </div>
+
+        <div id="mock" class="tab-content" style="display:none">
+
+            <h2>AI Mock Interview</h2>
+
+            <button onclick="startMockInterview()">Start AI Mock Interview</button>
+
+            <h3 id="mock-question"></h3>
+
+            <textarea id="mockAnswer" placeholder="Type textarea id=" mockAnswer "
+                placeholder="Type interview answer..." rows="5" style="width: 704px; height: 70px;"></textarea>
+
+            <button onclick="submitMockAnswer()">Submit Interview Answer</button>
+
+        </div>
+
+        <!-- LEADERBOARD -->
+        <div class="card">
+
+            <div id="leaderboard"></div>
+
+            <canvas id="scoreChart"></canvas>
+
+        </div>
+
+    </div>
+    <script>
+
+        function openTab(tabName) {
+
+            document.getElementById("quiz").style.display = "none"
+            document.getElementById("mock").style.display = "none"
+
+            document.getElementById(tabName).style.display = "block"
+
+        }
+
+        let chart = null;
+
+        let currentQuestion = ""
+
+        async function loadQuestion() {
+
+            const mode = document.getElementById("mode").value
+
+            let url = mode === "technical"
+                ? "http://127.0.0.1:8000/get-technical-question"
+                : "http://127.0.0.1:8000/get-hr-question"
+
+            const res = await fetch(url)
+
+            const data = await res.json()
+
+            currentQuestion = data.question
+
+            document.getElementById("question").innerText = data.question
+            // document.getElementById("answer").value = ""
+        }
+
+        window.onload = loadQuestion
+
+
+        async function submitAnswer() {
+
+            const username = document.getElementById("username").value
+            const answer = document.getElementById("answer").value
+            const mode = document.getElementById("mode").value
+
+            if (!username || !answer) {
+                alert("Please enter username and answer")
+                return
+            }
+
+            const response = await fetch("http://127.0.0.1:8000/submit-answer", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    username: username,
+                    mode: mode,
+                    question: currentQuestion,
+                    answer: answer
+                })
+            })
+
+            const data = await response.json()
+
+            document.getElementById("result").innerText =
+                "Score: " + data.score + " | " + data.ai_feedback
+
+            loadDashboard()
+        }
+
+
+        async function showLeaderboard() {
+
+            const res = await fetch("http://127.0.0.1:8000/leaderboard")
+
+            const data = await res.json()
+
+            let html = "<h3>Leaderboard</h3>"
+
+            data.leaderboard.forEach(user => {
+
+                html += `<p>${user.rank}. ${user.username} ⭐ ${user.average_score}</p>`
+
+            })
+
+            document.getElementById("leaderboard").innerHTML = html
+        }
+
+
+        async function loadDashboard() {
+
+            const username = document.getElementById("username").value
+
+            const res = await fetch(`http://127.0.0.1:8000/user-dashboard/${username}`)
+
+            const data = await res.json()
+
+            const ctx = document.getElementById("scoreChart")
+
+            if (chart) {
+                chart.destroy()
+            }
+
+            chart = new Chart(ctx, {
+                type: "bar",
+                data: {
+                    labels: ["HR", "Technical"],
+                    datasets: [{
+                        label: "Average Score",
+                        data: [data.hr_average, data.technical_average]
+                    }]
+                }
+            })
+        }
+        async function startMockInterview() {
+            const response = await fetch("http://127.0.0.1:8000/start-mock-interview");
+            const data = await response.json();
+
+            document.getElementById("mock-question").innerText = data.question;
+        }
+        async function submitMockAnswer() {
+
+            const answer = document.getElementById("mockAnswer").value;
+
+            const response = await fetch("http://127.0.0.1:8000/mock-interview-answer", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    answer: answer
+                })
+            });
+
+            const data = await response.json();
+
+            document.getElementById("mock-question").innerText = data.next_question;
+        }
+
+        function startVoice() {
+
+            const recognition = new webkitSpeechRecognition()
+
+            recognition.lang = "en-US"
+
+            recognition.start()
+
+            recognition.onresult = function (event) {
+
+                document.getElementById("answer").value =
+                    event.results[0][0].transcript
+
+            }
+
+        }
+
+
+    </script>
+
+</body>
+
+</html>
